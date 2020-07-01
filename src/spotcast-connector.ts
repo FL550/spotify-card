@@ -25,17 +25,15 @@ export class SpotcastConnector {
     return false;
   }
 
-  public fetchPlaylists(limit?: number): void {
-    //TODO implement limit
-    if (!limit) {
-      limit = 10;
-    }
+  public fetchPlaylists(limit: number): void {
     console.log(limit);
     this.loading = true;
     this.parent.hass.connection
       .sendMessagePromise({
         type: 'spotcast/playlists',
         playlist_type: this.parent.config.playlist_type ? this.parent.config.playlist_type : '',
+        //TODO include again
+        //country_code: this.parent.config.featuredPlaylistsCountryCode ? this.parent.config.featuredPlaylistsCountryCode : '',
       })
       .then(
         (resp: any) => {

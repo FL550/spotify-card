@@ -1,1 +1,1 @@
-- Do we need action handlers?
+- Add visualization for tring to start new playback 

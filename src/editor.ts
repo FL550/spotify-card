@@ -11,18 +11,19 @@ import {
 import { HomeAssistant, fireEvent, LovelaceCardEditor } from 'custom-card-helpers';
 
 import { SpotifyCardConfig } from './types';
+import { localize } from './localize/localize';
 
 const options = {
   general: {
     icon: 'tune',
-    name: 'General',
-    secondary: 'General settings for this card',
+    name: localize('settings.general'),
+    secondary: localize('settings.general_description'),
     show: true,
   },
   appearance: {
     icon: 'palette',
-    name: 'Appearance',
-    secondary: 'Customize the style, icon, etc',
+    name: localize('settings.appearance'),
+    secondary: localize('settings.appearance_description'),
     show: false,
   },
 };
@@ -44,7 +45,13 @@ export class SpotifyCardEditor extends LitElement implements LovelaceCardEditor 
     if (this._config) {
       return this._config.name || '';
     }
+    return '';
+  }
 
+  get _country_code(): string {
+    if (this._config) {
+      return this._config.country_code || '';
+    }
     return '';
   }
 
@@ -83,6 +90,13 @@ export class SpotifyCardEditor extends LitElement implements LovelaceCardEditor 
     return false;
   }
 
+  get _hide_warning(): boolean {
+    if (this._config) {
+      return this._config.hide_warning || false;
+    }
+    return false;
+  }
+
   get _show_warning(): boolean {
     if (this._config) {
       return this._config.show_warning || false;
@@ -116,7 +130,7 @@ export class SpotifyCardEditor extends LitElement implements LovelaceCardEditor 
               <div class="values">
                 <div>
                   <paper-dropdown-menu
-                    label="Playlist Type"
+                    label=${localize('settings.playlist_type')}
                     @value-changed=${this._valueChanged}
                     .configValue=${'playlist_type'}
                   >
@@ -128,7 +142,7 @@ export class SpotifyCardEditor extends LitElement implements LovelaceCardEditor 
                   </paper-dropdown-menu>
                 </div>
                 <div>
-                  <div>Amount of playlists shown</div>
+                  <div>${localize('settings.limit')}</div>
                   <paper-slider
                     .value=${this._limit}
                     .configValue=${'limit'}
@@ -140,9 +154,17 @@ export class SpotifyCardEditor extends LitElement implements LovelaceCardEditor 
                 </div>
                 <div>
                   <paper-input
-                    label="Height of card"
+                    label=${localize('settings.height')}
                     .value=${this._height}
                     .configValue=${'height'}
+                    @value-changed=${this._valueChanged}
+                  ></paper-input>
+                </div>
+                <div>
+                  <paper-input
+                    label=${localize('settings.country_code')}
+                    .value=${this._country_code}
+                    .configValue=${'country_code'}
                     @value-changed=${this._valueChanged}
                   ></paper-input>
                 </div>
@@ -160,8 +182,17 @@ export class SpotifyCardEditor extends LitElement implements LovelaceCardEditor 
           ? html`
               <div class="values">
                 <div>
+                  <ha-switch
+                    aria-label=${`Hide Warnings ${this._darkmode ? 'off' : 'on'}`}
+                    .checked=${this._hide_warning}
+                    .configValue=${'hide_warning'}
+                    @change=${this._valueChanged}
+                    >${localize('settings.hide_warning')}</ha-switch
+                  >
+                </div>
+                <div>
                   <paper-input
-                    label="Title of card"
+                    label=${localize('settings.title')}
                     .value=${this._name}
                     .configValue=${'name'}
                     @value-changed=${this._valueChanged}
@@ -169,7 +200,7 @@ export class SpotifyCardEditor extends LitElement implements LovelaceCardEditor 
                 </div>
                 <div>
                   <paper-dropdown-menu
-                    label="Display Style"
+                    label=${localize('settings.display_style')}
                     @value-changed=${this._valueChanged}
                     .configValue=${'display_style'}
                   >
@@ -181,6 +212,7 @@ export class SpotifyCardEditor extends LitElement implements LovelaceCardEditor 
                   </paper-dropdown-menu>
                 </div>
                 <div>
+                  <!-- TODO Darkmode neccessary? -->
                   <ha-switch
                     aria-label=${`Toggle Darkmode ${this._darkmode ? 'off' : 'on'}`}
                     .checked=${this._darkmode}
@@ -189,7 +221,13 @@ export class SpotifyCardEditor extends LitElement implements LovelaceCardEditor 
                     >Toggle Darkmode</ha-switch
                   >
                 </div>
-
+                <ha-switch
+                  aria-label=${`Toggle warning ${this._show_error ? 'off' : 'on'}`}
+                  .checked=${this._show_warning}
+                  .configValue=${'show_warning'}
+                  @change=${this._valueChanged}
+                  >Show Warning?</ha-switch
+                >
                 <ha-switch
                   aria-label=${`Toggle error ${this._show_error ? 'off' : 'on'}`}
                   .checked=${this._show_error}

@@ -10,7 +10,7 @@ import {
 } from 'lit-element';
 
 import { HomeAssistant, LovelaceCardEditor, getLovelace, LovelaceCard } from 'custom-card-helpers';
-import { servicesColl } from 'home-assistant-js-websocket';
+import { servicesColl, subscribeEntities, HassEntities } from 'home-assistant-js-websocket';
 
 import './editor';
 import { PLAYLIST_TYPES, DISPLAY_STYLES } from './editor';
@@ -62,10 +62,29 @@ export class SpotifyCard extends LitElement {
 
   //Private variables
   private spotcast_installed = false;
+  private spotify_installed = false;
+  private spotify_state: any = {};
 
   connectedCallback(): void {
     super.connectedCallback();
     this.spotcast_connector = new SpotcastConnector(this);
+    //Check for installed spotcast
+    if (servicesColl(this.hass.connection).state.spotcast !== undefined) {
+      this.spotcast_installed = true;
+    }
+    subscribeEntities(this.hass.connection, (entities) => this.entitiesUpdated(entities));
+  }
+
+  //Get current played playlist
+  entitiesUpdated(entities: HassEntities): void {
+    for (const item in entities) {
+      if (item.startsWith('media_player.spotify_')) {
+        this.spotify_installed = true;
+        this.spotify_state = entities[item];
+        console.log(entities[item]);
+        this.requestUpdate();
+      }
+    }
   }
 
   public setConfig(_config: SpotifyCardConfig): void {
@@ -77,6 +96,9 @@ export class SpotifyCard extends LitElement {
     if (_config.playlist_type && !PLAYLIST_TYPES.includes(_config.playlist_type)) {
       var_error = 'playlist_type';
     }
+    if (_config.country_code && !(typeof _config.country_code === 'string')) {
+      var_error = 'country_code';
+    }
     if (_config.height && !(typeof _config.height === 'number')) {
       var_error = 'height';
     }
@@ -86,6 +108,7 @@ export class SpotifyCard extends LitElement {
     if (_config.darkmode && !(typeof _config.darkmode === 'boolean')) {
       var_error = 'darkmode';
     }
+
     //Error test mode
     if (_config.show_error || var_error != '') {
       throw new Error(localize('common.invalid_configuration') + var_error);
@@ -113,17 +136,18 @@ export class SpotifyCard extends LitElement {
     if (this.config.show_warning) {
       warning = this.showWarning(localize('common.show_warning'));
     }
-    //Check for installed spotcast
-    if (servicesColl(this.hass.connection).state.spotcast === undefined) {
+    if (!this.spotcast_installed) {
       warning = this.showWarning(localize('common.show_missing_spotcast'));
-    } else {
-      this.spotcast_installed = true;
+    }
+
+    if (!this.spotify_installed) {
+      warning = this.showWarning(localize('common.show_missing_spotify'));
     }
 
     //Display loading screen if no content available yet
     let content = html`<div>loading</div>`;
     if (!this.spotcast_connector.is_loading() && this.spotcast_installed) {
-      this.spotcast_connector.fetchPlaylists();
+      this.spotcast_connector.fetchPlaylists(this.config.limit ? this.config.limit : 10);
     } else {
       //TODO add renderstyle
       content = this.generatePlaylistHTML();
@@ -131,7 +155,7 @@ export class SpotifyCard extends LitElement {
 
     return html`
       <ha-card tabindex="0" style="${this.config.height ? `height: ${this.config.height}px` : ``}"
-        >${warning}
+        >${this.config.hide_warning ? '' : warning}
         <div id="header">
           <div id="icon"><img src=${this.config.spotify_icon} /></div>
           ${this.config.name ? html`<div id="header_name">${this.config.name}</div>` : ''}
@@ -147,24 +171,35 @@ export class SpotifyCard extends LitElement {
 
   public generatePlaylistHTML(): TemplateResult {
     if (this.spotcast_connector.is_loaded()) {
-      const list = this.spotcast_connector.playlists.map((item) => {
-        return html`<div class="list-item">
+      const result: TemplateResult[] = [];
+      for (let i = 0; i < this.spotcast_connector.playlists.length; i++) {
+        const item = this.spotcast_connector.playlists[i];
+        let iconPlay = '';
+        let iconShuffle = '';
+        if (this.spotify_state.attributes.media_playlist === item.name) {
+          iconPlay = 'playing';
+          iconShuffle = this.spotify_state.attributes.shuffle ? 'playing' : '';
+        }
+        result.push(html`<div class="list-item">
           <img src="${item.images[item.images.length - 1].url}" />
-          <svg width="20" height="20">
-            <path d="M0 0h24v24H0z" fill="none" />
-            <path d="M8 5v14l11-7z" />
-          </svg>
-          <svg width="20" height="20">
-            <path d="M0 0h24v24H0z" fill="none" />
-            <path
-              d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"
-            />
-          </svg>
-          ${item.name}
-        </div>`;
-      });
-
-      return html`<div>${list}</div>`;
+          <div class="icon ${iconPlay}">
+            <svg width="24" height="24">
+              <path d="M0 0h24v24H0z" fill="none" />
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+          <div class="icon ${iconShuffle}">
+            <svg width="24" height="24">
+              <path d="M0 0h24v24H0z" fill="none" />
+              <path
+                d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"
+              />
+            </svg>
+          </div>
+          <p>${item.name}</p>
+        </div>`);
+      }
+      return html`<div>${result}</div>`;
     }
     return html``;
   }
@@ -190,6 +225,8 @@ export class SpotifyCard extends LitElement {
         ha-card {
           --header-height: 4em;
           --footer-height: 3em;
+          padding-left: 0.5em;
+          padding-right: 0.5em;
         }
 
         #header {
@@ -205,6 +242,7 @@ export class SpotifyCard extends LitElement {
 
         #content {
           height: calc(100% - var(--header-height) - var(--footer-height));
+          border: solid var(--divider-color) 1px;
           overflow: auto;
         }
 
@@ -223,7 +261,6 @@ export class SpotifyCard extends LitElement {
 
         #footer {
           height: var(--footer-height);
-          background-color: grey;
         }
       `,
       SpotifyCard.listStyles,
@@ -231,13 +268,44 @@ export class SpotifyCard extends LitElement {
   }
 
   static listStyles = css`
+    ha-card {
+      --list-item-height: 3em;
+      --spotify-color: #1db954;
+    }
+
     .list-item {
-      height: 60px;
-      border-bottom: solid black 1px;
+      /* height: var(--list-item-height); */
+      align-items: center;
+      border-bottom: solid var(--divider-color) 1px;
+      display: flex;
+      /* background-color: var(--primary-background-color); */
+    }
+
+    .list-item:last-of-type {
+      border-bottom: 0;
     }
 
     .list-item > img {
-      height: 60px;
+      height: var(--list-item-height);
+      object-fit: contain;
+    }
+
+    .list-item > .icon {
+      height: var(--list-item-height);
+      width: var(--list-item-height);
+      min-height: var(--list-item-height);
+      min-width: var(--list-item-height);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .list-item > .icon.playing {
+      fill: var(--spotify-color);
+    }
+
+    .list-item > p {
+      margin: 0 0.5em 0 0.5em;
     }
   `;
 

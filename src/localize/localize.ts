@@ -12,8 +12,9 @@ export function localize(string: string, search = '', replace = ''): string {
   const section = string.split('.')[0];
   const key = string.split('.')[1];
 
-  const lang = (localStorage.getItem('selectedLanguage') || 'en').replace(/['"]+/g, '').replace('-', '_');
-
+  const lang = (localStorage.getItem('selectedLanguage') || navigator.language.split('-')[0] || 'en')
+    .replace(/['"]+/g, '')
+    .replace('-', '_');
   let translated: string;
 
   try {

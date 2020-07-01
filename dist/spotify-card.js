@@ -2971,6 +2971,11 @@ var fecha = {
 
 var a=function(){try{(new Date).toLocaleDateString("i");}catch(e){return "RangeError"===e.name}return !1}()?function(e,t){return e.toLocaleDateString(t,{year:"numeric",month:"long",day:"numeric"})}:function(t){return fecha.format(t,"mediumDate")},r=function(){try{(new Date).toLocaleString("i");}catch(e){return "RangeError"===e.name}return !1}()?function(e,t){return e.toLocaleString(t,{year:"numeric",month:"long",day:"numeric",hour:"numeric",minute:"2-digit"})}:function(t){return fecha.format(t,"haDateTime")},n=function(){try{(new Date).toLocaleTimeString("i");}catch(e){return "RangeError"===e.name}return !1}()?function(e,t){return e.toLocaleTimeString(t,{hour:"numeric",minute:"2-digit"})}:function(t){return fecha.format(t,"shortTime")};var C=function(e,t,a,r){r=r||{},a=null==a?{}:a;var n=new Event(t,{bubbles:void 0===r.bubbles||r.bubbles,cancelable:Boolean(r.cancelable),composed:void 0===r.composed||r.composed});return n.detail=a,e.dispatchEvent(n),n};var J=function(){var e=document.querySelector("home-assistant");if(e=(e=(e=(e=(e=(e=(e=(e=e&&e.shadowRoot)&&e.querySelector("home-assistant-main"))&&e.shadowRoot)&&e.querySelector("app-drawer-layout partial-panel-resolver"))&&e.shadowRoot||e)&&e.querySelector("ha-panel-lovelace"))&&e.shadowRoot)&&e.querySelector("hui-root")){var t=e.lovelace;return t.current_view=e.___curView,t}return null};
 
+function states() {
+    return {
+        type: "get_states"
+    };
+}
 function services() {
     return {
         type: "get_services"
@@ -3110,6 +3115,7 @@ const getCollection = (conn, key, fetchCollection, subscribeUpdates) => {
     return conn[key];
 };
 
+const getStates = (connection) => connection.sendMessagePromise(states());
 const getServices = (connection) => connection.sendMessagePromise(services());
 
 function processServiceRegistered(state, event) {
@@ -3142,17 +3148,140 @@ const subscribeUpdates = (conn, store) => Promise.all([
 ]).then((unsubs) => () => unsubs.forEach((fn) => fn()));
 const servicesColl = (conn) => getCollection(conn, "_srv", fetchServices, subscribeUpdates);
 
+function processEvent(store, event) {
+    const state = store.state;
+    if (state === undefined)
+        return;
+    const { entity_id, new_state } = event.data;
+    if (new_state) {
+        store.setState({ [new_state.entity_id]: new_state });
+    }
+    else {
+        const newEntities = Object.assign({}, state);
+        delete newEntities[entity_id];
+        store.setState(newEntities, true);
+    }
+}
+async function fetchEntities(conn) {
+    const states = await getStates(conn);
+    const entities = {};
+    for (let i = 0; i < states.length; i++) {
+        const state = states[i];
+        entities[state.entity_id] = state;
+    }
+    return entities;
+}
+const subscribeUpdates$1 = (conn, store) => conn.subscribeEvents(ev => processEvent(store, ev), "state_changed");
+const entitiesColl = (conn) => getCollection(conn, "_ent", fetchEntities, subscribeUpdates$1);
+const subscribeEntities = (conn, onChange) => entitiesColl(conn).subscribe(onChange);
+
+var common = {
+	version: "Version",
+	invalid_configuration: "Invalid configuration value: ",
+	show_warning: "Show Warning",
+	show_missing_spotcast: "Spotcast integration has to be installed for this component to work",
+	show_missing_spotify: "Spotify integration has to be installed for playback information"
+};
+var settings = {
+	general: "General",
+	general_description: "General settings for this card",
+	appearance: "Appearance",
+	appearance_description: "Customize the style, icon, etc",
+	hide_warning: "Hide warnings",
+	playlist_type: "Playlist Type",
+	limit: "Amount of playlists shown",
+	height: "Height of card",
+	country_code: "Country Code for featured playlists",
+	title: "Title of card",
+	display_style: "Display Style"
+};
+var en = {
+	common: common,
+	settings: settings
+};
+
+var en$1 = /*#__PURE__*/Object.freeze({
+    __proto__: null,
+    common: common,
+    settings: settings,
+    'default': en
+});
+
+var common$1 = {
+	version: "Version",
+	invalid_configuration: "Ungültige Konfiguration",
+	show_warning: "Vis advarsel",
+	show_missing_spotcast: "Die Spotcast-Integration muss installiert sein, damit diese Karte funktioniert"
+};
+var settings$1 = {
+	general: "Allgemein",
+	general_description: "Allgemeine Einstellungen für diese Karte"
+};
+var de = {
+	common: common$1,
+	settings: settings$1
+};
+
+var de$1 = /*#__PURE__*/Object.freeze({
+    __proto__: null,
+    common: common$1,
+    settings: settings$1,
+    'default': de
+});
+
+var common$2 = {
+	version: "Version",
+	invalid_configuration: "Invalid configuration",
+	show_warning: "Show Warning",
+	show_missing_spotcast: "Spotcast integration has to be installed for this component to work"
+};
+var se = {
+	common: common$2
+};
+
+var se$1 = /*#__PURE__*/Object.freeze({
+    __proto__: null,
+    common: common$2,
+    'default': se
+});
+
+const languages = {
+    en: en$1,
+    de: de$1,
+    se: se$1,
+};
+function localize(string, search = '', replace = '') {
+    const section = string.split('.')[0];
+    const key = string.split('.')[1];
+    const lang = (localStorage.getItem('selectedLanguage') || navigator.language.split('-')[0] || 'en')
+        .replace(/['"]+/g, '')
+        .replace('-', '_');
+    let translated;
+    try {
+        translated = languages[lang][section][key];
+    }
+    catch (e) {
+        translated = languages['en'][section][key];
+    }
+    if (translated === undefined)
+        translated = languages['en'][section][key];
+    if (search !== '' && replace !== '') {
+        translated = translated.replace(search, replace);
+    }
+    return translated;
+}
+
 const options = {
     general: {
         icon: 'tune',
-        name: 'General',
-        secondary: 'General settings for this card',
+        name: localize('settings.general'),
+        secondary: localize('settings.general_description'),
         show: true,
     },
     appearance: {
         icon: 'palette',
-        name: 'Appearance',
-        secondary: 'Customize the style, icon, etc',
+        name: localize('settings.appearance'),
+        secondary: localize('settings.appearance_description'),
         show: false,
     },
 };
@@ -3165,6 +3294,12 @@ let SpotifyCardEditor = class SpotifyCardEditor extends LitElement {
     get _name() {
         if (this._config) {
             return this._config.name || '';
+        }
+        return '';
+    }
+    get _country_code() {
+        if (this._config) {
+            return this._config.country_code || '';
         }
         return '';
     }
@@ -3198,9 +3333,9 @@ let SpotifyCardEditor = class SpotifyCardEditor extends LitElement {
         }
         return false;
     }
-    get _hide_spotify_icon() {
+    get _hide_warning() {
         if (this._config) {
-            return this._config.hide_spotify_icon || false;
+            return this._config.hide_warning || false;
         }
         return false;
     }
@@ -3234,7 +3369,7 @@ let SpotifyCardEditor = class SpotifyCardEditor extends LitElement {
               <div class="values">
                 <div>
                   <paper-dropdown-menu
-                    label="Playlist Type"
+                    label=${localize('settings.playlist_type')}
                     @value-changed=${this._valueChanged}
                     .configValue=${'playlist_type'}
                   >
@@ -3246,7 +3381,7 @@ let SpotifyCardEditor = class SpotifyCardEditor extends LitElement {
                   </paper-dropdown-menu>
                 </div>
                 <div>
-                  <div>Amount of playlists shown</div>
+                  <div>${localize('settings.limit')}</div>
                   <paper-slider
                     .value=${this._limit}
                     .configValue=${'limit'}
@@ -3258,18 +3393,20 @@ let SpotifyCardEditor = class SpotifyCardEditor extends LitElement {
                 </div>
                 <div>
                   <paper-input
-                    label="Height of card"
+                    label=${localize('settings.height')}
                     .value=${this._height}
                     .configValue=${'height'}
                     @value-changed=${this._valueChanged}
                   ></paper-input>
                 </div>
-                <!-- <paper-input
-                    label="Amount of playlists shown"
-                    .value=${this._limit}
-                    .configValue=${'limit'}
+                <div>
+                  <paper-input
+                    label=${localize('settings.country_code')}
+                    .value=${this._country_code}
+                    .configValue=${'country_code'}
                     @value-changed=${this._valueChanged}
-                  ></paper-input> -->
+                  ></paper-input>
+                </div>
               </div>
             `
             : ''}
@@ -3284,8 +3421,25 @@ let SpotifyCardEditor = class SpotifyCardEditor extends LitElement {
             ? html `
               <div class="values">
                 <div>
+                  <ha-switch
+                    aria-label=${`Hide Warnings ${this._darkmode ? 'off' : 'on'}`}
+                    .checked=${this._hide_warning}
+                    .configValue=${'hide_warning'}
+                    @change=${this._valueChanged}
+                    >${localize('settings.hide_warning')}</ha-switch
+                  >
+                </div>
+                <div>
+                  <paper-input
+                    label=${localize('settings.title')}
+                    .value=${this._name}
+                    .configValue=${'name'}
+                    @value-changed=${this._valueChanged}
+                  ></paper-input>
+                </div>
+                <div>
                   <paper-dropdown-menu
-                    label="Display Style"
+                    label=${localize('settings.display_style')}
                     @value-changed=${this._valueChanged}
                     .configValue=${'display_style'}
                   >
@@ -3297,6 +3451,7 @@ let SpotifyCardEditor = class SpotifyCardEditor extends LitElement {
                   </paper-dropdown-menu>
                 </div>
                 <div>
+                  <!-- TODO Darkmode neccessary? -->
                   <ha-switch
                     aria-label=${`Toggle Darkmode ${this._darkmode ? 'off' : 'on'}`}
                     .checked=${this._darkmode}
@@ -3305,16 +3460,13 @@ let SpotifyCardEditor = class SpotifyCardEditor extends LitElement {
                     >Toggle Darkmode</ha-switch
                   >
                 </div>
-                <div>
-                  <ha-switch
-                    aria-label=${`Toggle Spotify Icon ${this._hide_spotify_icon ? 'on' : 'off'}`}
-                    .checked=${this._hide_spotify_icon}
-                    .configValue=${'hide_spotify_icon'}
-                    @change=${this._valueChanged}
-                    >Hide Spotify Icon</ha-switch
-                  >
-                </div>
-
+                <ha-switch
+                  aria-label=${`Toggle warning ${this._show_error ? 'off' : 'on'}`}
+                  .checked=${this._show_warning}
+                  .configValue=${'show_warning'}
+                  @change=${this._valueChanged}
+                  >Show Warning?</ha-switch
+                >
                 <ha-switch
                   aria-label=${`Toggle error ${this._show_error ? 'off' : 'on'}`}
                   .checked=${this._show_error}
@@ -3423,15 +3575,6 @@ SpotifyCardEditor = __decorate([
     customElement('spotify-card-editor')
 ], SpotifyCardEditor);
 
-const listStyles = css `
-  .blue-button {
-    color: white;
-    background-color: blue;
-  }
-  .blue-button:disabled {
-    background-color: grey;
-  }
-`;
 class SpotcastConnector {
     constructor(parent) {
         this.playlists = {};
@@ -3439,6 +3582,7 @@ class SpotcastConnector {
         this.parent = parent;
     }
     is_loading() {
+        setTimeout(this.set_loading_off, 100);
         return this.loading;
     }
     set_loading_off() {
@@ -3451,10 +3595,6 @@ class SpotcastConnector {
         return false;
     }
     fetchPlaylists(limit) {
-        //TODO implement limit
-        if (!limit) {
-            limit = 10;
-        }
         console.log(limit);
         this.loading = true;
         this.parent.hass.connection
@@ -3466,96 +3606,15 @@ class SpotcastConnector {
             console.log('Message success!', resp.items);
             this.playlists = resp.items;
             this.parent.requestUpdate();
-            setTimeout(this.set_loading_off, 100);
         }, (err) => {
             console.error('Message failed!', err);
         });
-    }
-    generatePlaylistHTML() {
-        if (this.is_loaded()) {
-            const list = this.playlists.map((item) => {
-                return html ` <p>${item.name}</p>`;
-            });
-            return html `<div>${list}</div>`;
-        }
-        return html ``;
     }
 }
 
 const CARD_VERSION = '2.0.0';
 
-var common = {
-	version: "Version",
-	invalid_configuration: "Invalid configuration value: ",
-	show_warning: "Show Warning",
-	show_missing_spotcast: "Spotcast integration has to be installed for this component to work"
-};
-var en = {
-	common: common
-};
-
-var en$1 = /*#__PURE__*/Object.freeze({
-    __proto__: null,
-    common: common,
-    'default': en
-});
-
-var common$1 = {
-	version: "Version",
-	invalid_configuration: "Ungültige Konfiguration",
-	show_warning: "Vis advarsel",
-	show_missing_spotcast: "Die Spotcast-Integration muss installiert sein, damit diese Karte funktioniert"
-};
-var de = {
-	common: common$1
-};
-
-var de$1 = /*#__PURE__*/Object.freeze({
-    __proto__: null,
-    common: common$1,
-    'default': de
-});
-
-var common$2 = {
-	version: "Version",
-	invalid_configuration: "Invalid configuration",
-	show_warning: "Show Warning",
-	show_missing_spotcast: "Spotcast integration has to be installed for this component to work"
-};
-var se = {
-	common: common$2
-};
-
-var se$1 = /*#__PURE__*/Object.freeze({
-    __proto__: null,
-    common: common$2,
-    'default': se
-});
-
-const languages = {
-    en: en$1,
-    de: de$1,
-    se: se$1,
-};
-function localize(string, search = '', replace = '') {
-    const section = string.split('.')[0];
-    const key = string.split('.')[1];
-    const lang = (localStorage.getItem('selectedLanguage') || 'en').replace(/['"]+/g, '').replace('-', '_');
-    let translated;
-    try {
-        translated = languages[lang][section][key];
-    }
-    catch (e) {
-        translated = languages['en'][section][key];
-    }
-    if (translated === undefined)
-        translated = languages['en'][section][key];
-    if (search !== '' && replace !== '') {
-        translated = translated.replace(search, replace);
-    }
-    return translated;
-}
-
+var SpotifyCard_1;
 //Display card verion in console
 /* eslint no-console: 0 */
 console.info(`%c  SPOTIFY-CARD \n%c  ${localize('common.version')} ${CARD_VERSION}    `, 'color: orange; font-weight: bold; background: black', 'color: white; font-weight: bold; background: dimgray');
@@ -3568,11 +3627,13 @@ window.customCards.push({
     description: 'A custom card for displaying Spotify-Playlist and starting playback',
     preview: true,
 });
-let SpotifyCard = class SpotifyCard extends LitElement {
+let SpotifyCard = SpotifyCard_1 = class SpotifyCard extends LitElement {
     constructor() {
         super(...arguments);
         //Private variables
         this.spotcast_installed = false;
+        this.spotify_installed = false;
+        this.spotify_state = {};
     }
     //Calls the editor
     static async getConfigElement() {
@@ -3585,6 +3646,22 @@ let SpotifyCard = class SpotifyCard extends LitElement {
     connectedCallback() {
         super.connectedCallback();
         this.spotcast_connector = new SpotcastConnector(this);
+        //Check for installed spotcast
+        if (servicesColl(this.hass.connection).state.spotcast !== undefined) {
+            this.spotcast_installed = true;
+        }
+        subscribeEntities(this.hass.connection, (entities) => this.entitiesUpdated(entities));
+    }
+    //Get current played playlist
+    entitiesUpdated(entities) {
+        for (const item in entities) {
+            if (item.startsWith('media_player.spotify_')) {
+                this.spotify_installed = true;
+                this.spotify_state = entities[item];
+                console.log(entities[item]);
+                this.requestUpdate();
+            }
+        }
     }
     setConfig(_config) {
         // TODO Check for required fields and that they are of the proper format
@@ -3595,6 +3672,9 @@ let SpotifyCard = class SpotifyCard extends LitElement {
         if (_config.playlist_type && !PLAYLIST_TYPES.includes(_config.playlist_type)) {
             var_error = 'playlist_type';
         }
+        if (_config.country_code && !(typeof _config.country_code === 'string')) {
+            var_error = 'country_code';
+        }
         if (_config.height && !(typeof _config.height === 'number')) {
             var_error = 'height';
         }
@@ -3603,9 +3683,6 @@ let SpotifyCard = class SpotifyCard extends LitElement {
         }
         if (_config.darkmode && !(typeof _config.darkmode === 'boolean')) {
             var_error = 'darkmode';
-        }
-        if (_config.hide_spotify_icon && !(typeof _config.hide_spotify_icon === 'boolean')) {
-            var_error = 'hide_spotify_icon';
         }
         //Error test mode
         if (_config.show_error || var_error != '') {
@@ -3627,34 +3704,69 @@ let SpotifyCard = class SpotifyCard extends LitElement {
         if (this.config.show_warning) {
             warning = this.showWarning(localize('common.show_warning'));
         }
-        //Check for installed spotcast
-        if (servicesColl(this.hass.connection).state.spotcast === undefined) {
+        if (!this.spotcast_installed) {
             warning = this.showWarning(localize('common.show_missing_spotcast'));
         }
-        else {
-            this.spotcast_installed = true;
+        if (!this.spotify_installed) {
+            warning = this.showWarning(localize('common.show_missing_spotify'));
         }
         //Display loading screen if no content available yet
         let content = html `<div>loading</div>`;
         if (!this.spotcast_connector.is_loading() && this.spotcast_installed) {
-            this.spotcast_connector.fetchPlaylists();
+            this.spotcast_connector.fetchPlaylists(this.config.limit ? this.config.limit : 10);
         }
         else {
             //TODO add renderstyle
-            content = this.spotcast_connector.generatePlaylistHTML();
+            content = this.generatePlaylistHTML();
         }
         return html `
-      <ha-card tabindex="0"
-        >${warning}
+      <ha-card tabindex="0" style="${this.config.height ? `height: ${this.config.height}px` : ``}"
+        >${this.config.hide_warning ? '' : warning}
         <div id="header">
-          ${this.config.hide_spotify_icon ? '' : html `<div id="icon"><img src=${this.config.spotify_icon} /></div>`}
+          <div id="icon"><img src=${this.config.spotify_icon} /></div>
           ${this.config.name ? html `<div id="header_name">${this.config.name}</div>` : ''}
+          <div></div>
         </div>
         <div id="content">
           ${content}
         </div>
+        <div id="footer"></div>
       </ha-card>
     `;
+    }
+    generatePlaylistHTML() {
+        if (this.spotcast_connector.is_loaded()) {
+            const result = [];
+            for (let i = 0; i < this.spotcast_connector.playlists.length; i++) {
+                const item = this.spotcast_connector.playlists[i];
+                let iconPlay = '';
+                let iconShuffle = '';
+                if (this.spotify_state.attributes.media_playlist === item.name) {
+                    iconPlay = 'playing';
+                    iconShuffle = this.spotify_state.attributes.shuffle ? 'playing' : '';
+                }
+                result.push(html `<div class="list-item">
+          <img src="${item.images[item.images.length - 1].url}" />
+          <div class="icon ${iconPlay}">
+            <svg width="24" height="24">
+              <path d="M0 0h24v24H0z" fill="none" />
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+          <div class="icon ${iconShuffle}">
+            <svg width="24" height="24">
+              <path d="M0 0h24v24H0z" fill="none" />
+              <path
+                d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"
+              />
+            </svg>
+          </div>
+          <p>${item.name}</p>
+        </div>`);
+            }
+            return html `<div>${result}</div>`;
+        }
+        return html ``;
     }
     showWarning(warning) {
         return html `<hui-warning>${warning}</hui-warning>`;
@@ -3671,18 +3783,33 @@ let SpotifyCard = class SpotifyCard extends LitElement {
     static get styles() {
         return [
             css `
+        ha-card {
+          --header-height: 4em;
+          --footer-height: 3em;
+          padding-left: 0.5em;
+          padding-right: 0.5em;
+        }
+
         #header {
           display: flex;
-          padding-top: 0.3em;
+          height: var(--header-height);
         }
         #header > * {
           flex: 1;
           display: flex;
           align-items: center;
+          justify-content: center;
+        }
+
+        #content {
+          height: calc(100% - var(--header-height) - var(--footer-height));
+          border: solid var(--divider-color) 1px;
+          overflow: auto;
         }
 
         #icon {
-          justify-content: center;
+          justify-content: left;
+          padding-left: 1em;
         }
 
         #icon img {
@@ -3692,11 +3819,66 @@ let SpotifyCard = class SpotifyCard extends LitElement {
         #header_name {
           font-size: x-large;
         }
+
+        #footer {
+          height: var(--footer-height);
+        }
       `,
-            listStyles,
+            SpotifyCard_1.listStyles,
         ];
     }
 };
+SpotifyCard.listStyles = css `
+    ha-card {
+      --list-item-height: 3em;
+      --spotify-color: #1db954;
+    }
+
+    .list-item {
+      /* height: var(--list-item-height); */
+      align-items: center;
+      border-bottom: solid var(--divider-color) 1px;
+      display: flex;
+      /* background-color: var(--primary-background-color); */
+    }
+
+    .list-item:last-of-type {
+      border-bottom: 0;
+    }
+
+    .list-item > img {
+      height: var(--list-item-height);
+      object-fit: contain;
+    }
+
+    .list-item > .icon {
+      height: var(--list-item-height);
+      width: var(--list-item-height);
+      min-height: var(--list-item-height);
+      min-width: var(--list-item-height);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .list-item > .icon.playing {
+      fill: var(--spotify-color);
+    }
+
+    .list-item > p {
+      margin: 0 0.5em 0 0.5em;
+    }
+  `;
+SpotifyCard.litIconSet = html ` <lit-iconset iconset="iconset">
+    <svg>
+      <defs>
+        <g id="play">
+          <path d="M0 0h24v24H0z" fill="none" />
+          <path d="M8 5v14l11-7z" />
+        </g>
+      </defs>
+    </svg>
+  </lit-iconset>`;
 __decorate([
     property({ type: Object })
 ], SpotifyCard.prototype, "hass", void 0);
@@ -3706,7 +3888,7 @@ __decorate([
 __decorate([
     internalProperty()
 ], SpotifyCard.prototype, "spotcast_connector", void 0);
-SpotifyCard = __decorate([
+SpotifyCard = SpotifyCard_1 = __decorate([
     customElement('spotify-card')
 ], SpotifyCard);
 
